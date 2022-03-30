@@ -1,0 +1,32 @@
+# Function that validates the request is relating to mounting only an approved auth method
+
+permitted_auth_methods=["userpass","kubernetes","ldap"]
+
+check_auth_method = func() {
+
+    # print("Request Path:", request.path)
+    # print("Request Data:", request.data)
+    # print("Permitted Auth Methods:", permitted_auth_methods)
+    # print("type of auth method:", request.data.type)
+
+    # Validate that path includes sys/auth
+
+    if (request.path matches "^(.*)sys\\/auth\\/(.*)$" and "type" in keys(request.data)) and 
+    (request.data.type not in permitted_auth_methods) and
+    (request.operation in ["create", "update"]) {
+        
+        print("Auth method type",request.data.type,"not permitted.")
+        print("The following Auth Method types are permitted:",permitted_auth_methods)
+        return false
+    }
+    
+    return true
+}
+
+# Main rule
+
+auth_method_validated = check_auth_method()
+
+main = rule {
+    auth_method_validated
+}

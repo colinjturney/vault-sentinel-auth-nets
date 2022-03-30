@@ -1,0 +1,66 @@
+# Function that prevents non-entity tokens from being created
+# Some changes to how non-entity tokens are handled were introduced in Vault 1.9
+# Read the docs for more info https://www.vaultproject.io/docs/concepts/client-count#understanding-non-entity-tokens
+
+check_net = func() {
+
+    # An orphan token is created via auth/token/create-orphan; such a token does not inherit the entity of its creator.
+
+    if (request.path == "auth/token/create-orphan") {
+        print("Creating non-entity tokens not permitted")
+        return false
+    }
+
+    # Return false if the token role allows the creation of non-entity tokens (e.g. orphaned)
+    
+    if (request.path matches "auth\\/token\\/roles\\/.*" and bool(request.data.orphan) else false) {
+
+        print("Creating roles that can create non-entity tokens is not permitted")
+        return false
+    }
+
+    # A token is created using a token role that specifies orphan=true.
+
+    if ((request.path == "auth/token/create" or request.path matches "auth\\/token\\/create\\/(.*)$") and 
+        (bool(request.data.no_parent) else false) or replication.mode.replication == "secondary"){
+
+        if (request.data.no_parent == true){
+            print("Creating non-entity tokens not permitted")
+            return false
+        }
+
+        if (replication.mode.replication == "secondary"){
+            print("Creating this token on a PR secondary would result in a non-entity token, which is not permitted")
+            return false
+        }
+    }
+
+    # Any other token without an entity creates a child token via auth/token/create or a token role.
+
+    if (request.path == "auth/token/create" or request.path matches "^auth\\/token\\/create\\/(.*)$"){
+
+        # Return true if there is an entity for this token
+
+        if(identity.entity.id matches ".*" else true){
+
+            print("Request Path:",request.path)
+            print("Request Data:",request.data)
+            print("Entity ID:", identity.entity.id)
+
+            return true
+        }
+
+        return false
+    }
+
+# An auth method would normally create an entity, but is not allowed to do so, such as:
+    # A batch token is created on a performance standby node.
+}
+
+# Main rule
+
+net_validated = check_net()
+
+main = rule {
+    net_validated
+}
